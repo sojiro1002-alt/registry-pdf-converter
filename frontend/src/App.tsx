@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useDropzone } from 'react-dropzone';
+import { useDropzone, FileRejection } from 'react-dropzone';
 import axios from 'axios';
 import { 
   FiUploadCloud, 
@@ -84,7 +84,7 @@ function App() {
     }
   }, []);
 
-  const onDropRejected = useCallback((fileRejections: { file: File; errors: { code: string; message: string }[] }[]) => {
+  const onDropRejected = useCallback((fileRejections: FileRejection[]) => {
     console.log('Files rejected:', fileRejections);
     if (fileRejections.length > 0) {
       const rejection = fileRejections[0];
