@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDropzone, FileRejection } from 'react-dropzone';
 import axios from 'axios';
+import api from './api';
 import { 
   FiUploadCloud, 
   FiFile, 
@@ -122,7 +123,7 @@ function App() {
     formData.append('pdf', file);
 
     try {
-      const response = await axios.post<ConversionResult>('/api/convert', formData, {
+      const response = await api.post<ConversionResult>('/convert', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         onUploadProgress: (progressEvent) => {
           const percent = progressEvent.total 
