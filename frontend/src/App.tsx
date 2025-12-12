@@ -129,8 +129,10 @@ function App() {
           const percent = progressEvent.total 
             ? Math.round((progressEvent.loaded * 100) / progressEvent.total)
             : 0;
-          setProgress(Math.min(percent, 90)); // Reserve 10% for processing
+          // 업로드는 빠르게 완료되므로 20%까지만 표시, 나머지는 처리 중 표시
+          setProgress(Math.min(percent, 20));
         },
+        timeout: 90000, // 90초 타임아웃 (백엔드 60초 + 여유)
       });
 
       setProgress(100);
@@ -551,8 +553,12 @@ function App() {
                         className="mt-6"
                       >
                         <div className="flex justify-between text-sm mb-2">
-                          <span className="text-white/60">변환 중...</span>
-                          <span className="text-white">{progress}%</span>
+                          <span className="text-white/60">
+                            {progress < 20 ? '파일 업로드 중...' : 'PDF 분석 및 Excel 생성 중...'}
+                          </span>
+                          <span className="text-white">
+                            {progress < 20 ? `${progress}%` : '처리 중...'}
+                          </span>
                         </div>
                         <div className="h-2 bg-white/10 rounded-full overflow-hidden">
                           <motion.div
