@@ -299,7 +299,11 @@ function App() {
                           <InfoCard
                             icon="📍"
                             label="소재지"
-                            value={result.data.parsedData.basicInfo.location || '-'}
+                            value={
+                              result.data.parsedData.basicInfo.location && result.data.parsedData.basicInfo.buildingName
+                                ? `${result.data.parsedData.basicInfo.location} ${result.data.parsedData.basicInfo.buildingName}`
+                                : result.data.parsedData.basicInfo.location || result.data.parsedData.basicInfo.buildingName || '-'
+                            }
                           />
                           <InfoCard
                             icon="👤"

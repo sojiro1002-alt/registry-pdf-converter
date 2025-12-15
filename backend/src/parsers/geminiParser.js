@@ -168,14 +168,15 @@ async function parseRegistryPdfWithGemini(filePath) {
    - **대지권종류**: "대지권종류" 레이블 뒤의 정보
    
    - **소유자명 (매우 중요!)**: 
-     ⚠️ 표제부 상단에 명시된 실제 소유자 이름을 반드시 추출하세요
-     - 가등기가 있는 경우: 가등기 권리자의 이름을 추출
-     - 가압류가 있는 경우: 표제부에 기재된 원래 소유자 이름을 추출
-     - 일반적인 경우: 표제부의 소유자 란에 기재된 이름을 추출
-     - 표제부에 "소유자" 또는 "권리자" 필드가 있으면 그 값을 추출
+     ⚠️ 표제부에 명시된 실제 소유자 이름만 추출하세요
+     - 표제부의 "소유자" 또는 "소유지분현황" 란에 기재된 이름 추출
+     - ❌ "가등기 권리자"는 소유자가 아니므로 추출하지 마세요
+     - ❌ "가압류 권리자"는 소유자가 아니므로 추출하지 마세요
+     - ✅ "소유자" 또는 "소유지분현황"에 명시된 이름만 추출
      예: "소유자: 홍길동" → "홍길동"
-     예: "가등기 권리자: 김철수" → "김철수"
-     ❌ 갑구의 가장 최근 소유권이전 정보가 아니라 표제부의 정보를 추출하세요
+     예: "1. 소유지분현황: 김철수" → "김철수"
+     예: 가등기 권리자: 이영희 (X - 추출하지 마세요)
+     - 표제부에 명확한 소유자 정보가 없으면 빈 문자열("")로 두세요
    
    **표제부 추출 시 핵심 원칙:**
    - 레이블("소재지번:", "도로명주소:" 등)은 추출하지 마세요
@@ -859,23 +860,42 @@ function formatDate(dateStr) {
  */
 function generateSummary(basicInfo, sectionA, sectionB) {
   // 현재 소유자 찾기
-  // 최우선: 표제부의 ownerName (가등기, 가압류 등 모든 경우 포함)
-  // 차선: 갑구의 유효한 소유권 등기
+  // 우선순위:
+  // 1. 갑구의 유효한 소유권이전/소유권보존 (가등기 제외)
+  // 2. 표제부의 ownerName (가압류 등의 경우)
+  // 3. 갑구의 기타 유효한 항목
   let currentOwner = null;
   
-  // 표제부에 소유자 정보가 있는 경우 - 무조건 우선 사용
-  // (가등기, 가압류, 기타 모든 특수 상황 포함)
-  if (basicInfo?.ownerName && basicInfo.ownerName.trim() !== '') {
-    console.log('[INFO] 표제부 소유자 정보 사용:', basicInfo.ownerName);
+  // 1차: 갑구에서 유효한 소유권 등기 찾기 (가등기 제외)
+  const validOwnershipEntries = sectionA?.filter(e => 
+    e.status === '유효' && 
+    (e.purpose?.includes('소유권이전') || e.purpose?.includes('소유권보존')) &&
+    !e.purpose?.includes('가등기')
+  );
+  
+  if (validOwnershipEntries && validOwnershipEntries.length > 0) {
+    // 가장 최근(마지막) 소유권 등기 사용
+    const latestEntry = validOwnershipEntries[validOwnershipEntries.length - 1];
+    console.log('[INFO] 갑구의 유효한 소유권 정보 사용:', latestEntry.rightHolder);
+    currentOwner = {
+      rightHolder: latestEntry.rightHolder,
+      idNumber: latestEntry.idNumber || '',
+      address: latestEntry.address || '',
+      receiptDate: latestEntry.receiptDate || ''
+    };
+  }
+  
+  // 2차: 갑구에 소유권 정보가 없으면 표제부 확인 (가압류 등의 경우)
+  if (!currentOwner && basicInfo?.ownerName && basicInfo.ownerName.trim() !== '') {
+    console.log('[INFO] 표제부 소유자 정보 사용 (갑구에 소유권 없음):', basicInfo.ownerName);
     
-    // 갑구에서 해당 소유자와 일치하는 항목 찾기 (상세 정보 보완용)
+    // 갑구에서 일치하는 항목 찾기 (상세 정보 보완용)
     const matchingEntry = sectionA?.find(e => 
       e.status === '유효' && 
       e.rightHolder === basicInfo.ownerName
     );
     
     if (matchingEntry) {
-      // 갑구에 일치하는 정보가 있으면 상세 정보 포함
       currentOwner = {
         rightHolder: basicInfo.ownerName,
         idNumber: matchingEntry.idNumber || '',
@@ -883,8 +903,6 @@ function generateSummary(basicInfo, sectionA, sectionB) {
         receiptDate: matchingEntry.receiptDate || ''
       };
     } else {
-      // 갑구에 일치하는 정보가 없어도 표제부 소유자 사용
-      // (가등기만 있는 경우, 표제부만 기재된 경우 등)
       currentOwner = {
         rightHolder: basicInfo.ownerName,
         idNumber: '',
@@ -894,12 +912,18 @@ function generateSummary(basicInfo, sectionA, sectionB) {
     }
   }
   
-  // 표제부에 정보가 없는 경우에만 갑구에서 찾기
+  // 3차: 그래도 없으면 갑구의 기타 유효한 항목
   if (!currentOwner) {
-    console.log('[INFO] 표제부 소유자 정보 없음, 갑구에서 검색');
-    currentOwner = sectionA
-      ?.filter(e => e.status === '유효' && (e.purpose?.includes('소유권이전') || e.purpose?.includes('소유권보존')))
-      .pop() || sectionA?.filter(e => e.status === '유효').pop();
+    console.log('[INFO] 갑구의 기타 유효한 항목에서 검색');
+    const anyValidEntry = sectionA?.filter(e => e.status === '유효').pop();
+    if (anyValidEntry) {
+      currentOwner = {
+        rightHolder: anyValidEntry.rightHolder,
+        idNumber: anyValidEntry.idNumber || '',
+        address: anyValidEntry.address || '',
+        receiptDate: anyValidEntry.receiptDate || ''
+      };
+    }
   }
   
   // 유효한 근저당권 총액
