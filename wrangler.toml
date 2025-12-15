@@ -8,7 +8,7 @@ name = "registry-pdf-converter"
 compatibility_date = "2024-12-15"
 pages_build_output_dir = "./frontend/dist"
 
-# 환경 변수 (선택사항)
-# [vars]
-# VITE_API_BASE = "https://your-backend-url.com/api"
+# 백엔드 API 연결
+[vars]
+VITE_API_BASE = "https://registry-pdf-converter-api.onrender.com/api"
 
