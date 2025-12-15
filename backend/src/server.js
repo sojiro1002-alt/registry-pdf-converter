@@ -183,12 +183,17 @@ app.post('/api/convert', upload.single('pdf'), async (req, res) => {
     console.log(`[INFO] 변환 완료: ${processingTime}ms`);
     
     // 3. 응답 반환
+    // 배포 환경에서는 전체 URL 반환
+    const baseUrl = process.env.NODE_ENV === 'production' 
+      ? 'https://registry-pdf-converter-api.onrender.com'
+      : `http://localhost:${PORT}`;
+    
     res.json({
       success: true,
       message: '변환이 완료되었습니다.',
       data: {
         fileName: outputFileName,
-        downloadUrl: `/api/download/${outputFileName}`,
+        downloadUrl: `${baseUrl}/api/download/${outputFileName}`,
         parsedData: parsedData,
         processingTime: `${processingTime}ms`
       }
