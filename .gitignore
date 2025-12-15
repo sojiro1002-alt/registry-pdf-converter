@@ -44,3 +44,7 @@ logs/
 **/api-keys.json
 **/secrets.json
 
+
+# Render API credentials
+update_render_env.sh
+.render_api_key
