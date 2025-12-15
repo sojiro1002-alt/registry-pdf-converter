@@ -360,13 +360,14 @@ app.use((error, req, res, next) => {
   });
 });
 
-// 서버 시작
-app.listen(PORT, () => {
+// 서버 시작 - Render를 위해 0.0.0.0으로 바인딩
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`
 ╔════════════════════════════════════════════════════════╗
 ║  등기부 등본 PDF → Excel 변환 서버                        ║
-║  Server running on http://localhost:${PORT}               ║
+║  Server running on http://0.0.0.0:${PORT}                ║
 ╚════════════════════════════════════════════════════════╝
   `);
+  console.log('[INFO] Server is ready to accept connections');
 });
 
