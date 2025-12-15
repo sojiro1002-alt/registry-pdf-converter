@@ -4,6 +4,7 @@
   "description": "등기부 등본 PDF → Excel 변환기",
   "private": true,
   "scripts": {
+    "start": "cd backend && npm start",
     "dev:frontend": "cd frontend && npm run dev",
     "dev:backend": "cd backend && npm start",
     "build:frontend": "cd frontend && npm run build",
