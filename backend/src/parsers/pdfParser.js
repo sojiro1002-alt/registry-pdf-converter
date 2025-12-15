@@ -86,18 +86,36 @@ function parseBasicInfo(header, title) {
   const uniqueNumber = extractPattern(combined, /고유번호\s*[:：]?\s*([\d\-]+)/) ||
                        extractPattern(combined, /(\d{4}-\d{4}-\d{6})/);
   
-  // 소재지번 추출
-  const locationMatch = combined.match(/소재지번[및\s]*건물번호[^\n]*\n([^\n【]+)/);
-  const location = locationMatch ? cleanText(locationMatch[1]) : 
-                   extractPattern(combined, /소재지\s*[:：]?\s*([^\n]+)/);
+  // 소재지번 추출 - 헤더 제외하고 실제 주소만
+  let location = '';
+  const locationLines = combined.split('\n');
+  for (let i = 0; i < locationLines.length; i++) {
+    const line = locationLines[i];
+    // "경기도", "서울", "부산" 등으로 시작하는 실제 주소 찾기
+    if (/^(경기도|서울|부산|인천|대구|광주|대전|울산|제주|강원|충청|전라|경상|세종).+동\s+\d+/.test(line)) {
+      location = cleanText(line);
+      break;
+    }
+  }
+  if (!location) {
+    location = extractPattern(combined, /소재지\s*[:：]?\s*([^\n]+)/) || '';
+  }
   
   // 도로명주소 추출
-  const roadAddress = extractPattern(combined, /도로명주소\s*[:：]?\s*([^\n]+)/) ||
+  const roadAddress = extractPattern(combined, /\[도로명주소\]\s*([^\n]+)/) ||
+                      extractPattern(combined, /도로명주소\s*[:：]?\s*([^\n]+)/) ||
                       extractPattern(combined, /\(도로명주소\s*[:：]?\s*([^\)]+)\)/);
   
-  // 건물명칭 추출
-  const buildingName = extractPattern(combined, /건물명칭\s*[:：]?\s*([^\n\[【]+)/) ||
-                       extractPattern(combined, /명\s*칭\s*[:：]?\s*([^\n]+)/);
+  // 건물명칭 추출 - 첫 페이지 상단의 [집합건물] 다음에서 추출
+  let buildingName = '';
+  const buildingMatch = combined.match(/\[집합건물\]\s+[^\n]+\s+([^\n]+제\d+동[^\n]+)/);
+  if (buildingMatch) {
+    buildingName = cleanText(buildingMatch[1]);
+  }
+  if (!buildingName) {
+    buildingName = extractPattern(combined, /건물명칭\s*[:：]?\s*([^\n\[【]+)/) ||
+                   extractPattern(combined, /명\s*칭\s*[:：]?\s*([^\n]+)/) || '';
+  }
   
   // 건물내역 (구조, 면적)
   const structureMatch = combined.match(/건물내역[^\n]*\n([^\n【]+)/);
@@ -108,16 +126,15 @@ function parseBasicInfo(header, title) {
                     combined.match(/면적\s*[:：]?\s*([\d,.]+)/);
   const exclusiveArea = areaMatch ? areaMatch[1] + '㎡' : '';
   
-  // 대지권 비율 추출
-  const landRightMatch = combined.match(/대지권비율\s*[:：]?\s*([^\n]+)/) ||
-                         combined.match(/([\d,]+)\s*분의\s*([\d,]+)/);
+  // 대지권 비율 추출 - "18191.7분의" 다음 줄의 숫자 포함
   let landRightRatio = '';
-  if (landRightMatch) {
-    if (landRightMatch[2]) {
-      landRightRatio = `${landRightMatch[1]}분의 ${landRightMatch[2]}`;
-    } else {
-      landRightRatio = cleanText(landRightMatch[1]);
-    }
+  const ratioMatch1 = combined.match(/([\d,.]+)\s*분의\s*\n?\s*([\d,.]+)/);
+  const ratioMatch2 = combined.match(/대지권비율\s*[:：]?\s*([^\n등기]+)/);
+  
+  if (ratioMatch1 && ratioMatch1[2]) {
+    landRightRatio = `${ratioMatch1[1]}분의 ${ratioMatch1[2]}`;
+  } else if (ratioMatch2) {
+    landRightRatio = cleanText(ratioMatch2[1]);
   }
   
   // 대지권 종류
@@ -153,25 +170,30 @@ function parseSectionA(text) {
     return entries;
   }
   
+  // 헤더 제거 및 실제 데이터만 추출
+  const cleanedText = text.replace(/【\s*갑\s*구\s*】/g, '')
+                          .replace(/\(\s*소유권에\s*관한\s*사항\s*\)/g, '')
+                          .replace(/순위번호\s+등\s*기\s*목\s*적\s+접\s*수\s+등\s*기\s*원\s*인\s+권리자\s+및\s+기타사항/g, '');
+  
   // 순위번호 기반으로 항목 분리
-  const lines = text.split('\n').filter(line => line.trim());
+  const lines = cleanedText.split('\n').filter(line => line.trim() && line.trim().length > 1);
   
   let currentEntry = null;
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     
-    // 순위번호 패턴 (1, 2, 3, 또는 1-1, 1-2 등 부기등기)
-    const rankMatch = line.match(/^(\d+(?:-\d+)?)\s+/);
+    // 순위번호 패턴: 줄 전체가 숫자 또는 숫자-숫자 형태
+    const isRankNumber = /^(\d+(?:-\d+)?)$/.test(line);
     
-    if (rankMatch) {
+    if (isRankNumber) {
       // 이전 항목 저장
       if (currentEntry) {
         entries.push(finalizeEntry(currentEntry));
       }
       
       currentEntry = {
-        rankNumber: rankMatch[1],
+        rankNumber: line,
         purpose: '',
         receiptDate: '',
         receiptNumber: '',
@@ -182,10 +204,6 @@ function parseSectionA(text) {
         status: '유효',
         rawText: line
       };
-      
-      // 같은 줄에서 정보 추출
-      const restText = line.substring(rankMatch[0].length);
-      parseEntryLine(restText, currentEntry, 'A');
     } else if (currentEntry) {
       // 기존 항목에 정보 추가
       currentEntry.rawText += '\n' + line;
@@ -213,23 +231,28 @@ function parseSectionB(text) {
     return entries;
   }
   
-  const lines = text.split('\n').filter(line => line.trim());
+  // 헤더 제거
+  const cleanedText = text.replace(/【\s*을\s*구\s*】/g, '')
+                          .replace(/\(\s*소유권\s*이외의\s*권리에\s*관한\s*사항\s*\)/g, '')
+                          .replace(/순위번호\s+등\s*기\s*목\s*적\s+접\s*수\s+등\s*기\s*원\s*인\s+권리자\s+및\s+기타사항/g, '');
+  
+  const lines = cleanedText.split('\n').filter(line => line.trim() && line.trim().length > 1);
   
   let currentEntry = null;
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     
-    // 순위번호 패턴
-    const rankMatch = line.match(/^(\d+(?:-\d+)?)\s+/);
+    // 순위번호 패턴: 줄 전체가 숫자 또는 숫자-숫자 형태
+    const isRankNumber = /^(\d+(?:-\d+)?)$/.test(line);
     
-    if (rankMatch) {
+    if (isRankNumber) {
       if (currentEntry) {
         entries.push(finalizeEntryB(currentEntry));
       }
       
       currentEntry = {
-        rankNumber: rankMatch[1],
+        rankNumber: line,
         purpose: '',
         receiptDate: '',
         receiptNumber: '',
@@ -240,9 +263,6 @@ function parseSectionB(text) {
         status: '유효',
         rawText: line
       };
-      
-      const restText = line.substring(rankMatch[0].length);
-      parseEntryLine(restText, currentEntry, 'B');
     } else if (currentEntry) {
       currentEntry.rawText += '\n' + line;
       parseEntryLine(line, currentEntry, 'B');
