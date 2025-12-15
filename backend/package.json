@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "등기부 등본 PDF를 Excel로 변환하는 백엔드 API",
   "main": "src/server.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js"
