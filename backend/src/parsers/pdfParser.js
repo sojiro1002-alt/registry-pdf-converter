@@ -395,16 +395,25 @@ function parseEntryLine(line, entry, section) {
  * 갑구 항목 최종 정리
  */
 function finalizeEntry(entry) {
+  // 말소 등기는 자동으로 말소 상태로 처리
+  let status = entry.status || '유효';
+  const purpose = entry.purpose || '';
+  
+  // "말소" 목적을 가진 등기는 처리 완료된 것으로 간주
+  if (purpose.includes('말소') || purpose.includes('해지') || purpose.includes('경정')) {
+    status = '말소';
+  }
+  
   return {
     rankNumber: entry.rankNumber || '',
-    purpose: entry.purpose || '',
+    purpose: purpose,
     receiptDate: entry.receiptDate || '',
     receiptNumber: entry.receiptNumber || '',
     registrationCause: entry.registrationCause || '',
     rightHolder: entry.rightHolder || '',
     idNumber: entry.idNumber || '',
     address: entry.address || '',
-    status: entry.status || '유효'
+    status: status
   };
 }
 
@@ -412,16 +421,25 @@ function finalizeEntry(entry) {
  * 을구 항목 최종 정리
  */
 function finalizeEntryB(entry) {
+  // 말소 등기는 자동으로 말소 상태로 처리
+  let status = entry.status || '유효';
+  const purpose = entry.purpose || '';
+  
+  // "말소" 목적을 가진 등기는 처리 완료된 것으로 간주
+  if (purpose.includes('말소') || purpose.includes('해지')) {
+    status = '말소';
+  }
+  
   return {
     rankNumber: entry.rankNumber || '',
-    purpose: entry.purpose || '',
+    purpose: purpose,
     receiptDate: entry.receiptDate || '',
     receiptNumber: entry.receiptNumber || '',
     registrationCause: entry.registrationCause || '',
     claimAmount: entry.claimAmount || '',
     debtor: entry.debtor || '',
     rightHolder: entry.rightHolder || '',
-    status: entry.status || '유효'
+    status: status
   };
 }
 
