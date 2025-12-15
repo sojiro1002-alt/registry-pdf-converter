@@ -1,8 +1,13 @@
 # Cloudflare 배포 가이드
 
+## ⚠️ 중요: Cloudflare Pages를 사용하세요!
+
+이 프로젝트는 **정적 사이트**이므로 **Cloudflare Pages**로 배포하는 것이 **강력히 권장**됩니다.
+**Cloudflare Workers**는 API 서버용이며, 정적 사이트에는 적합하지 않습니다.
+
 이 프로젝트는 두 가지 방법으로 Cloudflare에 배포할 수 있습니다:
-1. **Cloudflare Pages** (권장) - GitHub 연동 자동 배포
-2. **Cloudflare Workers** - Wrangler CLI를 통한 수동 배포
+1. **Cloudflare Pages** (✅ 권장) - GitHub 연동 자동 배포, 빌드 자동화
+2. **Cloudflare Workers** (⚠️ 비권장) - Wrangler CLI를 통한 수동 배포, 빌드 수동 실행 필요
 
 ## 방법 1: Cloudflare Pages 배포 (권장)
 
