@@ -1,0 +1,22 @@
+{
+  "name": "registry-pdf-converter",
+  "version": "1.0.0",
+  "description": "등기부 등본 PDF → Excel 변환기",
+  "private": true,
+  "scripts": {
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && npm start",
+    "build:frontend": "cd frontend && npm run build",
+    "deploy:cloudflare": "cd frontend && npm run build && wrangler deploy",
+    "deploy:cloudflare:pages": "cd frontend && npm run build"
+  },
+  "keywords": [
+    "pdf",
+    "excel",
+    "registry",
+    "converter"
+  ],
+  "author": "",
+  "license": "MIT"
+}
+

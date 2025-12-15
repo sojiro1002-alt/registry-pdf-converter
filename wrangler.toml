@@ -1,0 +1,17 @@
+# Cloudflare Workers 배포 설정
+# 프론트엔드 정적 사이트 배포용
+
+name = "registry-pdf-converter"
+compatibility_date = "2024-01-01"
+
+# 정적 자산 배포 (빌드된 파일)
+[site]
+bucket = "./frontend/dist"
+
+# 환경 변수 (선택사항)
+# [vars]
+# VITE_API_BASE = "https://your-backend-url.com/api"
+
+# Workers 배포 시 사용할 경우 (현재는 정적 사이트 배포)
+# main = "src/index.js"
+

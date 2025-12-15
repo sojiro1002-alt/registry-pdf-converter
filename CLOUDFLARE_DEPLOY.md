@@ -1,6 +1,12 @@
-# Cloudflare Pages 배포 가이드
+# Cloudflare 배포 가이드
 
-## 프론트엔드 배포 (Cloudflare Pages)
+이 프로젝트는 두 가지 방법으로 Cloudflare에 배포할 수 있습니다:
+1. **Cloudflare Pages** (권장) - GitHub 연동 자동 배포
+2. **Cloudflare Workers** - Wrangler CLI를 통한 수동 배포
+
+## 방법 1: Cloudflare Pages 배포 (권장)
+
+### 프론트엔드 배포 (Cloudflare Pages)
 
 ### 1. 사전 준비
 - Cloudflare 계정 생성: https://dash.cloudflare.com/
@@ -68,4 +74,118 @@ const allowedOrigins = [
 ## 자동 배포
 
 GitHub에 푸시하면 자동으로 재배포됩니다.
+
+---
+
+## 방법 2: Cloudflare Workers 배포 (Wrangler CLI)
+
+### 사전 준비
+
+1. **Wrangler CLI 설치**:
+```bash
+npm install -g wrangler
+# 또는
+npm install --save-dev wrangler
+```
+
+2. **Cloudflare 인증**:
+```bash
+wrangler login
+```
+
+3. **프론트엔드 빌드**:
+```bash
+cd frontend
+npm install
+npm run build
+```
+
+### 배포 방법
+
+#### 옵션 A: 프로젝트 루트에서 배포
+
+```bash
+# 프로젝트 루트에서
+wrangler deploy
+```
+
+이 방법은 프로젝트 루트의 `wrangler.toml` 파일을 사용합니다.
+
+#### 옵션 B: frontend 디렉토리에서 배포
+
+```bash
+cd frontend
+wrangler deploy
+```
+
+이 방법은 `frontend/wrangler.toml` 파일을 사용합니다.
+
+#### 옵션 C: 명령어에 직접 지정
+
+```bash
+# 프로젝트 루트에서
+wrangler deploy --assets=./frontend/dist
+
+# 또는 frontend 디렉토리에서
+cd frontend
+wrangler deploy --assets=./dist
+```
+
+### 환경 변수 설정
+
+Workers 배포 시 환경 변수를 설정하려면:
+
+1. **wrangler.toml 파일 수정**:
+```toml
+[vars]
+VITE_API_BASE = "https://your-backend-url.com/api"
+```
+
+2. **또는 명령어로 설정**:
+```bash
+wrangler deploy --var VITE_API_BASE:https://your-backend-url.com/api
+```
+
+### 배포 확인
+
+배포 완료 후 제공되는 URL로 접속하여 확인하세요.
+
+### 문제 해결
+
+#### 에러: "No entry-point specified"
+
+이 에러는 `wrangler.toml` 파일이 없거나 잘못 설정된 경우 발생합니다.
+
+**해결 방법:**
+1. 프로젝트 루트 또는 frontend 디렉토리에 `wrangler.toml` 파일이 있는지 확인
+2. `[site]` 섹션의 `bucket` 경로가 올바른지 확인
+3. 빌드가 완료되어 `dist` 디렉토리가 존재하는지 확인
+
+#### 에러: "Cannot find module"
+
+빌드가 완료되지 않은 경우 발생합니다.
+
+**해결 방법:**
+```bash
+cd frontend
+npm run build
+```
+
+#### 배포 전 체크리스트
+
+- [ ] `wrangler.toml` 파일이 올바른 위치에 있는가?
+- [ ] `npm run build`가 성공적으로 완료되었는가?
+- [ ] `dist` 디렉토리에 빌드된 파일들이 있는가?
+- [ ] `wrangler login`으로 인증이 완료되었는가?
+- [ ] 환경 변수(`VITE_API_BASE`)가 올바르게 설정되었는가?
+
+### Workers vs Pages 비교
+
+| 항목 | Cloudflare Pages | Cloudflare Workers |
+|------|-----------------|-------------------|
+| 배포 방법 | GitHub 연동 자동 배포 | Wrangler CLI 수동 배포 |
+| 설정 파일 | `cloudflare-pages.json` | `wrangler.toml` |
+| 빌드 | 자동 (GitHub 푸시 시) | 수동 (`npm run build`) |
+| 환경 변수 | Dashboard에서 설정 | `wrangler.toml` 또는 CLI |
+| 권장 사용 | 프로덕션 배포 | 테스트/개발 배포 |
 

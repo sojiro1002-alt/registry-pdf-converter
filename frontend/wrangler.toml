@@ -1,0 +1,14 @@
+# Cloudflare Workers 배포 설정 (프론트엔드 디렉토리용)
+# 이 파일은 frontend 디렉토리에서 직접 배포할 때 사용
+
+name = "registry-pdf-converter-frontend"
+compatibility_date = "2024-01-01"
+
+# 정적 자산 배포 (빌드된 파일)
+[site]
+bucket = "./dist"
+
+# 환경 변수 (선택사항)
+# [vars]
+# VITE_API_BASE = "https://your-backend-url.com/api"
+
