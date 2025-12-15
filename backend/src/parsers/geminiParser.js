@@ -47,7 +47,7 @@ async function callGeminiAPIWithRetry(base64Pdf, prompt, maxRetries = 3) { // �
             temperature: 0.1,
             topK: 40,
             topP: 0.95,
-            maxOutputTokens: 16384, // 원래 설정으로 복원 (JSON 생성 안정성)
+            maxOutputTokens: 32768, // 최대값으로 증가 (복잡한 PDF 대응, 긴 JSON 응답 허용)
           }
         },
         {
@@ -560,12 +560,45 @@ PDF 텍스트가 이렇게 되어 있다면:
       }
       
       if (endBrace === -1) {
-        console.error('[ERROR] JSON 객체의 닫는 중괄호를 찾을 수 없습니다.');
-        console.error('[DEBUG] 전체 응답 텍스트 (처음 1000자):', text.substring(0, 1000));
-        throw new Error('Gemini API 응답에서 JSON 객체의 닫는 중괄호를 찾을 수 없습니다.');
+        console.warn('[WARN] JSON 객체가 완전하지 않음 (응답이 잘림). 자동 완성을 시도합니다...');
+        console.warn('[WARN] 불완전한 응답 길이:', jsonText.length, '자');
+        console.warn('[WARN] 열린 중괄호 개수:', braceCount);
+        
+        // 자동 완성: 열린 중괄호/대괄호를 닫기
+        jsonText = jsonText.substring(firstBrace);
+        
+        // 문자열이 열려있으면 닫기
+        if (inString) {
+          jsonText += '"';
+          console.warn('[WARN] 열린 문자열을 자동으로 닫았습니다.');
+        }
+        
+        // 마지막 불완전한 항목 제거 (마지막 쉼표 이후부터)
+        // 마지막 완전한 객체/배열을 찾기 위해 역방향으로 탐색
+        const lastCompleteComma = jsonText.lastIndexOf(',');
+        if (lastCompleteComma > 0) {
+          // 마지막 쉼표 이후의 불완전한 데이터 제거
+          jsonText = jsonText.substring(0, lastCompleteComma);
+          console.warn('[WARN] 불완전한 마지막 항목을 제거했습니다. (마지막 쉼표 이후)');
+        }
+        
+        // 열린 배열 닫기
+        const openBrackets = (jsonText.match(/\[/g) || []).length - (jsonText.match(/\]/g) || []).length;
+        for (let i = 0; i < openBrackets; i++) {
+          jsonText += ']';
+        }
+        
+        // 열린 객체 닫기
+        for (let i = 0; i < braceCount; i++) {
+          jsonText += '}';
+        }
+        
+        console.warn('[WARN] JSON 자동 완성 완료. 추가된 닫는 괄호: 대괄호 ' + openBrackets + '개, 중괄호 ' + braceCount + '개');
+        console.warn('[WARN] 완성된 JSON 길이:', jsonText.length, '자');
+        console.warn('[WARN] 완성된 JSON 마지막 200자:', jsonText.substring(Math.max(0, jsonText.length - 200)));
+      } else {
+        jsonText = jsonText.substring(firstBrace, endBrace + 1);
       }
-      
-      jsonText = jsonText.substring(firstBrace, endBrace + 1);
       
       // #region agent log
       try {
