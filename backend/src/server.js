@@ -123,16 +123,45 @@ app.post('/api/convert', upload.single('pdf'), async (req, res) => {
       const geminiTime = Date.now() - geminiStartTime;
       console.log(`[INFO] Gemini API 파싱 성공 (${geminiTime}ms)`);
       
-      // 파싱된 데이터 검증
+      // 파싱된 데이터 엄격 검증
       if (!parsedData || !parsedData.basicInfo) {
         throw new Error('Gemini API 파싱 결과가 비어있습니다.');
       }
       
-      // basicInfo가 비어있는지 확인
-      const hasBasicInfo = parsedData.basicInfo && Object.keys(parsedData.basicInfo).length > 0;
-      if (!hasBasicInfo) {
-        console.warn('[WARN] Gemini API 파싱 결과: basicInfo가 비어있습니다. 폴백 파서로 재시도...');
-        throw new Error('Gemini API 파싱 결과가 유효하지 않습니다.');
+      // basicInfo 필수 필드 검증
+      const basicInfo = parsedData.basicInfo;
+      const hasValidLocation = basicInfo.location && 
+        basicInfo.location !== '번,건물명칭 및 번호' && 
+        basicInfo.location !== '번' &&
+        basicInfo.location.length > 5; // 최소 주소 길이
+      
+      const hasValidBuildingName = basicInfo.buildingName && 
+        basicInfo.buildingName !== '및 번호' &&
+        basicInfo.buildingName !== '건물명칭' &&
+        basicInfo.buildingName.length > 2;
+      
+      const hasValidUniqueNumber = basicInfo.uniqueNumber && 
+        /\d{4}-\d{4}-\d{6}/.test(basicInfo.uniqueNumber);
+      
+      // 최소한 하나의 필수 필드가 유효해야 함
+      const hasMinimumRequiredData = hasValidLocation || hasValidUniqueNumber || hasValidBuildingName;
+      
+      if (!hasMinimumRequiredData) {
+        console.warn('[WARN] Gemini API 파싱 결과: 필수 필드가 유효하지 않습니다.');
+        console.warn('[WARN] location:', basicInfo.location);
+        console.warn('[WARN] buildingName:', basicInfo.buildingName);
+        console.warn('[WARN] uniqueNumber:', basicInfo.uniqueNumber);
+        console.warn('[WARN] 폴백 파서로 재시도...');
+        throw new Error('Gemini API 파싱 결과가 유효하지 않습니다 - 필수 데이터 누락');
+      }
+      
+      // sectionA와 sectionB가 모두 비어있는지 확인
+      const hasSectionAData = parsedData.sectionA && parsedData.sectionA.length > 0;
+      const hasSectionBData = parsedData.sectionB && parsedData.sectionB.length > 0;
+      
+      if (!hasSectionAData && !hasSectionBData) {
+        console.warn('[WARN] Gemini API 파싱 결과: 갑구/을구 데이터가 모두 비어있습니다. 폴백 파서로 재시도...');
+        throw new Error('Gemini API 파싱 결과가 유효하지 않습니다 - 갑구/을구 데이터 누락');
       }
       
     } catch (geminiError) {
@@ -144,6 +173,7 @@ app.post('/api/convert', upload.single('pdf'), async (req, res) => {
       try {
         parsedData = await parseRegistryPdf(filePath);
         console.log(`[INFO] 기존 파서로 파싱 완료`);
+        console.log(`[INFO] 폴백 파서 결과: basicInfo 필드 수 ${Object.keys(parsedData.basicInfo || {}).length}, sectionA 수 ${parsedData.sectionA?.length || 0}, sectionB 수 ${parsedData.sectionB?.length || 0}`);
       } catch (fallbackError) {
         console.error(`[ERROR] 폴백 파서도 실패:`, fallbackError.message);
         throw new Error(`PDF 파싱 실패: ${geminiError.message}. 폴백 파서도 실패: ${fallbackError.message}`);
