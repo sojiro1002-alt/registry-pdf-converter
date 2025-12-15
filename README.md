@@ -190,6 +190,33 @@ MIT License
 
 이슈나 풀 리퀘스트를 환영합니다!
 
+## ☁️ 배포
+
+### Cloudflare Pages
+
+프론트엔드를 Cloudflare Pages에 배포할 수 있습니다.
+
+자세한 배포 가이드는 [CLOUDFLARE_DEPLOY.md](./CLOUDFLARE_DEPLOY.md)를 참조하세요.
+
+**빠른 배포:**
+1. Cloudflare Dashboard → Pages → Create a project
+2. GitHub 저장소 연결
+3. 빌드 설정:
+   - Build command: `cd frontend && npm install && npm run build`
+   - Build output directory: `frontend/dist`
+   - Root directory: `frontend`
+4. 환경 변수 설정: `VITE_API_BASE` (백엔드 URL)
+
+### GitHub Pages
+
+프론트엔드를 GitHub Pages에 배포할 수도 있습니다.
+
+```bash
+cd frontend
+npm run build
+npx gh-pages -d dist -b gh-pages
+```
+
 ## 📧 문의
 
 프로젝트에 대한 문의사항이 있으시면 이슈를 등록해주세요.

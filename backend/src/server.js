@@ -21,10 +21,28 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // CORS 설정
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'https://sojiro1002-alt.github.io',
+  'https://*.pages.dev' // Cloudflare Pages 도메인
+];
+
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:5173'],
+  origin: (origin, callback) => {
+    // origin이 없으면 (같은 도메인 요청 등) 허용
+    if (!origin) return callback(null, true);
+    
+    // 허용된 origin이거나 pages.dev 서브도메인이면 허용
+    if (allowedOrigins.includes(origin) || origin.endsWith('.pages.dev')) {
+      callback(null, true);
+    } else {
+      callback(new Error('CORS 정책에 의해 차단되었습니다'));
+    }
+  },
   methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type']
+  allowedHeaders: ['Content-Type'],
+  credentials: true
 }));
 
 app.use(express.json());

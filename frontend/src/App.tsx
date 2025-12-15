@@ -72,7 +72,8 @@ function App() {
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<ConversionResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'summary' | 'sectionA' | 'sectionB'>('summary');
+  const [activeTab, setActiveTab] = useState<'summary' | 'sectionA' | 'sectionB' | 'debug'>('summary');
+  const [showDebug, setShowDebug] = useState(false);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     console.log('Files dropped:', acceptedFiles);
@@ -260,6 +261,7 @@ function App() {
                       { id: 'summary', label: '📊 요약' },
                       { id: 'sectionA', label: '📋 갑구' },
                       { id: 'sectionB', label: '📋 을구' },
+                      { id: 'debug', label: '🔍 파싱 결과' },
                     ].map((tab) => (
                       <button
                         key={tab.id}
@@ -413,6 +415,109 @@ function App() {
                         ) : (
                           <p className="text-white/50 text-center py-8">등록된 정보가 없습니다.</p>
                         )}
+                      </motion.div>
+                    )}
+
+                    {activeTab === 'debug' && (
+                      <motion.div
+                        key="debug"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className="space-y-4"
+                      >
+                        <div className="p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20 mb-4">
+                          <h3 className="text-yellow-400 font-semibold mb-2 flex items-center gap-2">
+                            <FiAlertCircle className="w-5 h-5" />
+                            파싱 결과 확인
+                          </h3>
+                          <p className="text-yellow-300 text-sm">
+                            아래 정보를 확인하여 데이터가 제대로 추출되었는지 확인하세요.
+                          </p>
+                        </div>
+
+                        {/* BasicInfo 상세 정보 */}
+                        <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                          <h3 className="text-white font-semibold mb-3 flex items-center gap-2">
+                            📋 표제부 정보 (basicInfo)
+                          </h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                              <span className="text-white/60 text-sm">고유번호:</span>
+                              <p className="text-white font-mono text-sm">{result.data.parsedData.basicInfo.uniqueNumber || <span className="text-red-400">(없음)</span>}</p>
+                            </div>
+                            <div>
+                              <span className="text-white/60 text-sm">소재지번:</span>
+                              <p className="text-white font-mono text-sm break-words">{result.data.parsedData.basicInfo.location || <span className="text-red-400">(없음)</span>}</p>
+                            </div>
+                            <div>
+                              <span className="text-white/60 text-sm">도로명주소:</span>
+                              <p className="text-white font-mono text-sm break-words">{result.data.parsedData.basicInfo.roadAddress || <span className="text-red-400">(없음)</span>}</p>
+                            </div>
+                            <div>
+                              <span className="text-white/60 text-sm">건물명칭:</span>
+                              <p className="text-white font-mono text-sm break-words">{result.data.parsedData.basicInfo.buildingName || <span className="text-red-400">(없음)</span>}</p>
+                            </div>
+                            <div>
+                              <span className="text-white/60 text-sm">소유자명:</span>
+                              <p className="text-white font-mono text-sm">{result.data.parsedData.basicInfo.ownerName || <span className="text-red-400">(없음)</span>}</p>
+                            </div>
+                            <div>
+                              <span className="text-white/60 text-sm">건물구조:</span>
+                              <p className="text-white font-mono text-sm">{result.data.parsedData.basicInfo.structure || <span className="text-red-400">(없음)</span>}</p>
+                            </div>
+                            <div>
+                              <span className="text-white/60 text-sm">전용면적:</span>
+                              <p className="text-white font-mono text-sm">{result.data.parsedData.basicInfo.exclusiveArea || <span className="text-red-400">(없음)</span>}</p>
+                            </div>
+                            <div>
+                              <span className="text-white/60 text-sm">대지권비율:</span>
+                              <p className="text-white font-mono text-sm">{result.data.parsedData.basicInfo.landRightRatio || <span className="text-red-400">(없음)</span>}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 데이터 통계 */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                            <div className="text-white/60 text-sm mb-1">갑구 항목 수</div>
+                            <div className="text-2xl font-bold text-white">{result.data.parsedData.sectionA.length}</div>
+                            <div className="text-xs text-white/40 mt-1">
+                              유효: {result.data.parsedData.sectionA.filter((item: any) => item.status === '유효').length}건
+                            </div>
+                          </div>
+                          <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                            <div className="text-white/60 text-sm mb-1">을구 항목 수</div>
+                            <div className="text-2xl font-bold text-white">{result.data.parsedData.sectionB.length}</div>
+                            <div className="text-xs text-white/40 mt-1">
+                              유효: {result.data.parsedData.sectionB.filter((item: any) => item.status === '유효').length}건
+                            </div>
+                          </div>
+                          <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                            <div className="text-white/60 text-sm mb-1">처리 시간</div>
+                            <div className="text-2xl font-bold text-white">{result.data.processingTime}</div>
+                          </div>
+                        </div>
+
+                        {/* 원본 JSON 데이터 (접기/펼치기) */}
+                        <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                          <button
+                            onClick={() => setShowDebug(!showDebug)}
+                            className="flex items-center justify-between w-full text-left"
+                          >
+                            <h3 className="text-white font-semibold flex items-center gap-2">
+                              🔍 원본 파싱 데이터 (JSON)
+                            </h3>
+                            <span className="text-white/60 text-sm">{showDebug ? '접기' : '펼치기'}</span>
+                          </button>
+                          {showDebug && (
+                            <div className="mt-4 p-4 rounded-lg bg-black/30 border border-white/10 overflow-auto max-h-96">
+                              <pre className="text-xs text-white/80 font-mono whitespace-pre-wrap break-words">
+                                {JSON.stringify(result.data.parsedData, null, 2)}
+                              </pre>
+                            </div>
+                          )}
+                        </div>
                       </motion.div>
                     )}
                   </AnimatePresence>

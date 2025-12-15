@@ -95,18 +95,39 @@ async function parseRegistryPdfWithGemini(filePath) {
       throw new Error('PDF 파일이 너무 큽니다 (최대 20MB)');
     }
     
-    // Gemini API에 요청할 프롬프트 (가등기 처리 포함, 상세 버전)
+    // Gemini API에 요청할 프롬프트 (종합 개선 버전)
     const prompt = `당신은 한국 등기부 등본(등기사항전부증명서) 전문 분석가입니다. 
 다음 PDF 파일을 **완전히 분석**하여 **모든 정보를 빠짐없이 추출**하고 JSON 형식으로 반환해주세요.
 
-**최우선 지침 (반드시 준수):**
+**⚠️ 매우 중요 - 절대 금지 사항:**
+1. **레이블 텍스트를 데이터로 넣지 마세요**
+   - "번, 건물명칭 및 번호" → location 필드에 넣지 마세요 (이것은 레이블입니다)
+   - "등기원인 및 기타사항" → landRightRatio 필드에 넣지 마세요 (이것은 다른 섹션의 레이블입니다)
+   - "및 번호" → buildingName 필드에 넣지 마세요 (불완전한 값입니다)
+   - "]" 또는 "[" → roadAddress 필드에 넣지 마세요 (잘못된 값입니다)
+
+2. **각 필드의 실제 데이터만 추출하세요**
+   - 레이블("소재지번:", "도로명주소:", "건물명칭:" 등) 뒤에 나오는 실제 값만 추출하세요
+   - 표의 헤더 행이나 설명 텍스트는 데이터가 아닙니다
+
+3. **JSON 문법을 정확히 지켜주세요**
+   - 배열/객체 마지막 항목 뒤에 쉼표(,)를 사용하지 마세요
+   - 문자열 내 특수문자는 반드시 이스케이프 처리하세요 (\\", \\n, \\\\)
+   - 모든 문자열은 큰따옴표(")로 감싸세요
+   - JSON만 반환하세요 (마크다운 코드 블록, 설명, 주석 없이)
+
+**📋 최우선 지침 (반드시 순서대로 실행):**
 1. PDF의 **모든 페이지**를 처음부터 끝까지 꼼꼼히 읽어주세요
-2. **표제부(표지)** 섹션을 가장 먼저 확인하고, 고유번호, 소재지번, 도로명주소, 건물명칭, 소유자명을 반드시 추출하세요
-3. **갑구** 섹션의 모든 등기 항목을 순서대로 읽고, 각 항목의 순위번호, 등기목적, 접수일자, 권리자(소유자), 주소, 상태를 추출하세요
-4. **을구** 섹션의 모든 등기 항목을 순서대로 읽고, 각 항목의 순위번호, 등기목적, 채권최고액, 채무자, 권리자, 상태를 추출하세요
+2. **표제부(표지)** 섹션을 가장 먼저 확인하고, 다음 정보를 **반드시 모두** 추출하세요:
+   - 고유번호: "고유번호" 또는 "등기번호" 레이블 뒤의 값 (형식: XXXX-XXXX-XXXXXX)
+   - 소재지번: "소재지번" 또는 "소재지" 레이블 뒤의 주소 (동호수 제외)
+   - 도로명주소: "도로명주소" 레이블 뒤의 주소 (동호수 제외)
+   - 건물명칭: "건물명칭" 또는 "명칭" 레이블 뒤의 건물명과 동호수 전체
+   - 소유자명: 표제부에 명시된 소유자 이름 (가등기 있는 경우 우선)
+3. **갑구** 섹션의 **모든** 등기 항목을 순서대로 읽고 추출하세요 (하나도 빠뜨리지 마세요)
+4. **을구** 섹션의 **모든** 등기 항목을 순서대로 읽고 추출하세요 (하나도 빠뜨리지 마세요)
 5. 표 형식의 데이터를 **행별로 정확히** 읽어주세요 (가로로 읽지 말고 세로 열별로 읽으세요)
 6. **말소 표시**(실선, 취소선, "말소" 텍스트)를 정확히 확인하여 상태를 "말소" 또는 "유효"로 구분하세요
-7. 정보가 없어도 빈 문자열("")로 반환하되, **가능한 모든 정보를 최대한 추출**하세요
 
 **데이터 추출 규칙:**
 1. 날짜 형식: YYYY-MM-DD로 변환 (예: 2024년8월22일 → 2024-08-22, 2024.8.22 → 2024-08-22)
@@ -120,22 +141,38 @@ async function parseRegistryPdfWithGemini(filePath) {
 **추출할 정보 (표제부부터 순서대로):**
 
 1. 표제부 (【표제부】 또는 첫 페이지 상단):
-   **반드시 다음 정보를 모두 찾아서 추출하세요:**
-   - 고유번호: "고유번호" 또는 "등기번호" 뒤에 나오는 형식 (XXXX-XXXX-XXXXXX)
-   - 소재지번: "소재지번" 또는 "소재지" 뒤에 나오는 주소 (동호수 제외, 예: "경기도 의정부시 신곡동 167-20")
-   - 도로명주소: "도로명주소" 뒤에 나오는 주소 (동호수 제외, 예: "경기도 의정부시 시민로317번길 15")
-   - 건물명칭: "건물명칭" 또는 "명칭" 뒤에 나오는 건물명과 동호수 전체 (예: "극동스타클래스아파트 제103동 제12층 제1201호")
-   - 건물구조: "구조" 또는 "건물구조" 정보
-   - 전용면적: "전용면적" 또는 "면적" 정보 (㎡ 단위 포함)
-   - 대지권비율: "대지권비율" 또는 "비율" 정보 (분의 형식)
-   - 대지권종류: "대지권종류" 정보
-   - 소유자명: 표제부에 명시된 소유자 이름 (가등기가 있는 경우 우선적으로 추출)
+   **⚠️ 반드시 다음 정보를 모두 찾아서 추출하세요 (레이블이 아닌 실제 값만):**
    
-   **표제부 추출 시 주의사항:**
+   - **고유번호**: "고유번호" 또는 "등기번호" 레이블 뒤에 나오는 값만 추출
+     예: "고유번호: 1342-2017-016558" → "1342-2017-016558"
+     ❌ 잘못된 예: "고유번호" (레이블만)
+   
+   - **소재지번**: "소재지번" 또는 "소재지" 레이블 뒤에 나오는 주소만 추출 (동호수 제외)
+     예: "소재지번: 경기도 의정부시 신곡동 167-20" → "경기도 의정부시 신곡동 167-20"
+     ❌ 잘못된 예: "번, 건물명칭 및 번호" (레이블 텍스트)
+     ❌ 잘못된 예: "및 번호" (불완전한 값)
+   
+   - **도로명주소**: "도로명주소" 레이블 뒤에 나오는 주소만 추출 (동호수 제외)
+     예: "도로명주소: 경기도 의정부시 시민로317번길 15" → "경기도 의정부시 시민로317번길 15"
+     ❌ 잘못된 예: "]" 또는 "[" (잘못된 값)
+   
+   - **건물명칭**: "건물명칭" 또는 "명칭" 레이블 뒤에 나오는 건물명과 동호수 전체 추출
+     예: "건물명칭: 극동스타클래스아파트 제103동 제12층 제1201호" → "극동스타클래스아파트 제103동 제12층 제1201호"
+     ❌ 잘못된 예: "및 번호" (불완전한 값)
+   
+   - **건물구조**: "구조" 또는 "건물구조" 레이블 뒤의 정보
+   - **전용면적**: "전용면적" 또는 "면적" 레이블 뒤의 정보 (㎡ 단위 포함)
+   - **대지권비율**: "대지권비율" 또는 "비율" 레이블 뒤의 정보 (분의 형식)
+     ❌ 잘못된 예: "등기원인 및 기타사항" (다른 섹션의 레이블)
+   
+   - **대지권종류**: "대지권종류" 레이블 뒤의 정보
+   - **소유자명**: 표제부에 명시된 소유자 이름 (가등기가 있는 경우 우선적으로 추출)
+   
+   **표제부 추출 시 핵심 원칙:**
+   - 레이블("소재지번:", "도로명주소:" 등)은 추출하지 마세요
+   - 레이블 뒤에 나오는 실제 데이터 값만 추출하세요
    - 소재지번과 도로명주소에는 동호수(제XX동, 제XX층, 제XX호)를 포함하지 마세요
    - 건물명칭 필드에는 반드시 동호수 정보를 포함하세요 (집합건물의 경우 필수)
-   - 소재지번과 건물명칭을 명확히 구분하여 추출하세요
-   - 표제부에 소유자명이 명시되어 있으면 반드시 추출하세요
 
 2. 갑구 (【갑구】 섹션) - 각 등기 항목별로:
    - 순위번호 (1, 2, 3 등)
@@ -200,28 +237,71 @@ async function parseRegistryPdfWithGemini(filePath) {
   ]
 }
 
-**중요:**
-- 반드시 유효한 JSON만 반환하세요 (JSON 문법을 정확히 지켜주세요)
-- 다른 설명이나 주석은 포함하지 마세요
+**✅ 최종 확인 사항 (반환 전 반드시 체크):**
+1. **JSON 문법 검증**
+   - 배열/객체 마지막 항목 뒤에 쉼표(,)가 없나요?
+   - 모든 문자열이 큰따옴표(")로 감싸져 있나요?
+   - 특수문자가 올바르게 이스케이프되었나요?
+   - JSON이 완전히 닫혀있나요? (중괄호와 대괄호가 모두 닫혀있어야 함)
+
+2. **데이터 검증**
+   - location 필드에 "번, 건물명칭 및 번호" 같은 레이블이 들어가지 않았나요?
+   - roadAddress 필드에 "]" 같은 잘못된 값이 들어가지 않았나요?
+   - buildingName 필드에 "및 번호" 같은 불완전한 값이 들어가지 않았나요?
+   - landRightRatio 필드에 "등기원인 및 기타사항" 같은 다른 섹션의 텍스트가 들어가지 않았나요?
+   - 각 필드에 실제 데이터 값이 들어갔나요?
+
+3. **완전성 검증**
+   - sectionA 배열에 모든 갑구 항목이 포함되었나요?
+   - sectionB 배열에 모든 을구 항목이 포함되었나요?
+   - basicInfo의 필수 필드(uniqueNumber, location 등)가 모두 채워졌나요?
+
+**📤 응답 형식:**
+- 반드시 유효한 JSON 객체만 반환하세요
+- 마크다운 코드 블록(```json ... ```)이나 다른 설명 없이 순수 JSON만 반환하세요
 - 모든 필드는 문자열로 반환하세요 (숫자 필드도 문자열)
 - 정보가 없으면 빈 문자열 "" 또는 빈 배열 []을 반환하세요
-- PDF의 모든 페이지를 확인하세요
-- 표 형식의 데이터를 행별로 정확히 읽어주세요
-- 말소 표시(실선, 취소선)를 정확히 확인하세요
-- 가등기가 있는 경우 표제부 소유자 정보를 basicInfo.ownerName에 반영하세요
-- JSON 문법 주의사항:
-  * 배열/객체 마지막 항목 뒤에 쉼표(,)를 사용하지 마세요
-  * 문자열 내 특수문자(따옴표, 줄바꿈, 백슬래시)는 반드시 이스케이프(\\", \\n, \\\\) 처리하세요
-  * 모든 문자열은 큰따옴표(")로 감싸세요
-  * 숫자는 따옴표 없이 사용하되, JSON에서는 문자열로 반환하세요
+- JSON이 완전히 닫혀있어야 합니다 (중첩된 모든 객체와 배열이 올바르게 닫혀있어야 함)
 
-**응답 형식:**
-응답은 반드시 유효한 JSON 객체만 반환하세요. 마크다운 코드 블록이나 다른 설명 없이 순수 JSON만 반환하세요.
-예시:
+**예시 (올바른 형식):**
 {
-  "basicInfo": { ... },
-  "sectionA": [ ... ],
-  "sectionB": [ ... ]
+  "basicInfo": {
+    "uniqueNumber": "1342-2017-016558",
+    "location": "경기도 광주시 태전동 695",
+    "roadAddress": "경기도 광주시 태전동로 12",
+    "buildingName": "이편한세상태전2차 제102동 제2층 제202호",
+    "structure": "철근콘크리트구조...",
+    "exclusiveArea": "84.9918m²",
+    "landRightRatio": "18191.7분의 55.5162",
+    "landRightType": "소유권대지권",
+    "ownerName": "권지은"
+  },
+  "sectionA": [
+    {
+      "rankNumber": "1",
+      "purpose": "소유권보존",
+      "receiptDate": "2017-11-27",
+      "receiptNumber": "제85281호",
+      "registrationCause": "신탁",
+      "rightHolder": "케이비부동산신탁주식회사",
+      "idNumber": "110111-1348237",
+      "address": "서울특별시 강남구 테헤란로 124(역삼동)",
+      "status": "유효"
+    }
+  ],
+  "sectionB": [
+    {
+      "rankNumber": "1",
+      "purpose": "근저당권설정",
+      "receiptDate": "2018-01-18",
+      "receiptNumber": "제12345호",
+      "registrationCause": "설정계약",
+      "claimAmount": "144000000",
+      "debtor": "권지은",
+      "rightHolder": "신한은행",
+      "status": "유효"
+    }
+  ]
 }`;
 
     // Gemini API 요청 (PDF를 직접 전달, 재시도 로직 포함)
@@ -241,65 +321,180 @@ async function parseRegistryPdfWithGemini(filePath) {
     console.log('[DEBUG] Gemini 응답 처음 2000자:', responseText.substring(0, 2000));
     console.log('[DEBUG] Gemini 응답 마지막 1000자:', responseText.substring(Math.max(0, responseText.length - 1000)));
     
-    // JSON 부분만 추출해서 로그 출력 (디버깅용)
-    const debugJsonMatch = responseText.match(/\{[\s\S]*\}/);
-    if (debugJsonMatch) {
-      const extractedJson = debugJsonMatch[0];
-      console.log('[DEBUG] 추출된 JSON 길이:', extractedJson.length, '자');
-      console.log('[DEBUG] 추출된 JSON 처음 1500자:', extractedJson.substring(0, 1500));
+    // #region agent log
+    try {
+      fetch('http://127.0.0.1:7242/ingest/aea20415-20d7-43b7-94bf-cc94e6541506',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'geminiParser.js:244',message:'gemini response received',data:{responseLength:responseText.length,first1000Chars:responseText.substring(0,1000),last500Chars:responseText.substring(Math.max(0,responseText.length-500))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    } catch (e) {}
+    // #endregion
+    
+    // JSON 추출 및 정제 함수 (중첩 구조 올바르게 처리)
+    function extractJsonFromResponse(text) {
+      let jsonText = text.trim();
       
-      // JSON에서 basicInfo 부분만 추출해서 확인
-      const basicInfoMatch = extractedJson.match(/"basicInfo"\s*:\s*\{[^}]*\}/);
-      if (basicInfoMatch) {
-        console.log('[DEBUG] basicInfo 부분:', basicInfoMatch[0]);
-      } else {
-        console.warn('[WARN] JSON에서 basicInfo를 찾을 수 없습니다!');
+      // 1. 마크다운 코드 블록 제거
+      jsonText = jsonText.replace(/```json\s*/gi, '').replace(/```\s*/g, '');
+      
+      // 2. JSON 객체만 추출 (중첩 구조를 올바르게 처리)
+      // 첫 번째 {를 찾고, 중괄호 카운터로 올바른 닫는 }를 찾음
+      const firstBrace = jsonText.indexOf('{');
+      if (firstBrace === -1) {
+        console.error('[ERROR] JSON 객체를 찾을 수 없습니다 (시작 중괄호 없음).');
+        console.error('[DEBUG] 전체 응답 텍스트 (처음 1000자):', text.substring(0, 1000));
+        throw new Error('Gemini API 응답에서 JSON 객체를 찾을 수 없습니다.');
       }
-    } else {
-      console.error('[ERROR] Gemini 응답에서 JSON 객체를 찾을 수 없습니다!');
-      console.error('[ERROR] 응답 전체 내용:', responseText);
+      
+      let braceCount = 0;
+      let inString = false;
+      let escaped = false;
+      let endBrace = -1;
+      
+      for (let i = firstBrace; i < jsonText.length; i++) {
+        const char = jsonText[i];
+        
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        
+        if (char === '\\') {
+          escaped = true;
+          continue;
+        }
+        
+        if (char === '"') {
+          inString = !inString;
+          continue;
+        }
+        
+        if (!inString) {
+          if (char === '{') {
+            braceCount++;
+          } else if (char === '}') {
+            braceCount--;
+            if (braceCount === 0) {
+              endBrace = i;
+              break;
+            }
+          }
+        }
+      }
+      
+      if (endBrace === -1) {
+        console.error('[ERROR] JSON 객체의 닫는 중괄호를 찾을 수 없습니다.');
+        console.error('[DEBUG] 전체 응답 텍스트 (처음 1000자):', text.substring(0, 1000));
+        throw new Error('Gemini API 응답에서 JSON 객체의 닫는 중괄호를 찾을 수 없습니다.');
+      }
+      
+      jsonText = jsonText.substring(firstBrace, endBrace + 1);
+      
+      // #region agent log
+      try {
+        fetch('http://127.0.0.1:7242/ingest/aea20415-20d7-43b7-94bf-cc94e6541506',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'geminiParser.js:290',message:'json extracted with proper nesting',data:{jsonTextLength:jsonText.length,firstBrace:firstBrace,endBrace:endBrace,originalLength:text.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+      } catch (e) {}
+      // #endregion
+      
+      return jsonText;
     }
+    
+    // 강력한 JSON 수정 함수
+    function fixJsonSyntax(jsonText) {
+      let fixed = jsonText;
+      
+      // 1. 마지막 쉼표 제거 (여러 번 반복)
+      for (let i = 0; i < 10; i++) {
+        const before = fixed;
+        fixed = fixed.replace(/,(\s*[}\]])/g, '$1');
+        if (before === fixed) break;
+      }
+      
+      // 2. 문자열 내부가 아닌 곳의 주석 제거 (// 또는 /* */)
+      // 하지만 JSON에는 주석이 없어야 하므로 제거
+      fixed = fixed.replace(/\/\/.*$/gm, ''); // 라인 주석
+      fixed = fixed.replace(/\/\*[\s\S]*?\*\//g, ''); // 블록 주석
+      
+      // 3. 문자열 밖의 줄바꿈/탭 정리 (안전하게)
+      let inString = false;
+      let escaped = false;
+      let result = '';
+      
+      for (let i = 0; i < fixed.length; i++) {
+        const char = fixed[i];
+        const nextChar = fixed[i + 1];
+        
+        if (escaped) {
+          result += char;
+          escaped = false;
+          continue;
+        }
+        
+        if (char === '\\') {
+          escaped = true;
+          result += char;
+          continue;
+        }
+        
+        if (char === '"') {
+          inString = !inString;
+          result += char;
+          continue;
+        }
+        
+        if (!inString) {
+          // 문자열 밖에서만 처리
+          if (char === '\n' || char === '\r') {
+            // 줄바꿈을 공백으로 (단, 연속된 공백은 하나로)
+            if (result[result.length - 1] !== ' ') {
+              result += ' ';
+            }
+            continue;
+          }
+          if (char === '\t') {
+            result += ' ';
+            continue;
+          }
+        }
+        
+        result += char;
+      }
+      
+      fixed = result;
+      
+      // 4. 연속된 공백 정리 (문자열 밖에서만)
+      fixed = fixed.replace(/\s+/g, ' ');
+      
+      // 5. 특수한 경우: 단일 따옴표를 큰따옴표로 변환 (문자열 밖에서만)
+      // 하지만 이건 위험할 수 있으므로 주석 처리
+      
+      return fixed;
+    }
+    
+    // JSON 추출
+    let jsonText = extractJsonFromResponse(responseText);
     
     // #region agent log
     try {
-      fetch('http://127.0.0.1:7242/ingest/aea20415-20d7-43b7-94bf-cc94e6541506',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'geminiParser.js:172',message:'gemini response received',data:{responseLength:responseText.length,first500Chars:responseText.substring(0,500)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+      fetch('http://127.0.0.1:7242/ingest/aea20415-20d7-43b7-94bf-cc94e6541506',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'geminiParser.js:423',message:'json extracted before parse',data:{jsonTextLength:jsonText.length,first500Chars:jsonText.substring(0,500),last200Chars:jsonText.substring(Math.max(0,jsonText.length-200)),hasBasicInfoInText:jsonText.includes('"basicInfo"'),hasLocationInText:jsonText.includes('"location"'),hasSectionA:jsonText.includes('"sectionA"'),hasSectionB:jsonText.includes('"sectionB"')},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
     } catch (e) {}
     // #endregion
     
-    // JSON 추출 (마크다운 코드 블록 제거)
-    let jsonText = responseText.trim();
-    
-    // ```json 또는 ``` 코드 블록 제거
-    jsonText = jsonText.replace(/```json\s*/g, '').replace(/```\s*/g, '');
-    
-    // JSON 객체만 추출 (중괄호로 시작하고 끝나는 부분)
-    const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      jsonText = jsonMatch[0];
-    } else {
-      console.error('[ERROR] JSON 객체를 찾을 수 없습니다.');
-      console.error('[DEBUG] 전체 응답 텍스트:', responseText);
-      throw new Error('Gemini API 응답에서 JSON 객체를 찾을 수 없습니다.');
-    }
-    
-    // #region agent log
-    try {
-      fetch('http://127.0.0.1:7242/ingest/aea20415-20d7-43b7-94bf-cc94e6541506',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'geminiParser.js:232',message:'before JSON parse',data:{jsonTextLength:jsonText.length,first200Chars:jsonText.substring(0,200)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
-    } catch (e) {}
-    // #endregion
-    
-    // JSON 파싱 (재시도 로직 포함, 더 안전한 방식)
+    // JSON 파싱 (재시도 로직 포함, 더 강력한 수정)
     let parsedData;
     let parseAttempts = 0;
-    const maxParseAttempts = 5;
+    const maxParseAttempts = 7; // 재시도 횟수 증가
     let workingJsonText = jsonText;
+    const originalJsonText = jsonText; // 원본 보관
     
     while (parseAttempts < maxParseAttempts) {
       try {
-        // 1차: 마지막 쉼표 제거만 시도
-        workingJsonText = workingJsonText.replace(/,(\s*[}\]])/g, '$1');
         parsedData = JSON.parse(workingJsonText);
         console.log(`[INFO] JSON 파싱 성공 (시도 ${parseAttempts + 1}/${maxParseAttempts})`);
+        
+        // #region agent log
+        try {
+          fetch('http://127.0.0.1:7242/ingest/aea20415-20d7-43b7-94bf-cc94e6541506',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'geminiParser.js:380',message:'json parse success',data:{attempt:parseAttempts+1,hasBasicInfo:!!parsedData.basicInfo,basicInfoKeys:parsedData.basicInfo?Object.keys(parsedData.basicInfo):[],locationValue:parsedData.basicInfo?.location,roadAddressValue:parsedData.basicInfo?.roadAddress,buildingNameValue:parsedData.basicInfo?.buildingName,ownerNameValue:parsedData.basicInfo?.ownerName},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        } catch (e) {}
+        // #endregion
+        
         break; // 성공하면 루프 종료
       } catch (parseError) {
         parseAttempts++;
@@ -310,32 +505,23 @@ async function parseRegistryPdfWithGemini(filePath) {
         const positionMatch = errorMsg.match(/position (\d+)/);
         const errorPosition = positionMatch ? parseInt(positionMatch[1]) : null;
         
-        if (errorPosition) {
-          const start = Math.max(0, errorPosition - 50);
-          const end = Math.min(workingJsonText.length, errorPosition + 50);
+        if (errorPosition && errorPosition < workingJsonText.length) {
+          const start = Math.max(0, errorPosition - 100);
+          const end = Math.min(workingJsonText.length, errorPosition + 100);
           console.error(`[DEBUG] 오류 위치 주변 (${start}-${end}):`, workingJsonText.substring(start, end));
+          console.error(`[DEBUG] 오류 위치 문자:`, workingJsonText[errorPosition], `(코드: ${workingJsonText.charCodeAt(errorPosition)})`);
         }
         
         if (parseAttempts >= maxParseAttempts) {
-          // 최종 시도: 더 신중한 수정
+          // 최종 시도: 가장 강력한 수정
           try {
-            console.log('[INFO] 최종 시도: 신중한 JSON 수정 적용...');
+            console.log('[INFO] 최종 시도: 강력한 JSON 수정 적용...');
             
             // 원본으로 복원
-            workingJsonText = jsonText;
+            workingJsonText = originalJsonText;
             
-            // 1. 마지막 쉼표 제거
-            workingJsonText = workingJsonText.replace(/,(\s*[}\]])/g, '$1');
-            
-            // 2. 여러 번의 쉼표 제거 시도 (중첩된 경우)
-            for (let i = 0; i < 5; i++) {
-              const before = workingJsonText;
-              workingJsonText = workingJsonText.replace(/,(\s*[}\]])/g, '$1');
-              if (before === workingJsonText) break;
-            }
-            
-            // 3. 이스케이프되지 않은 제어 문자 제거 (문자열 밖에서만)
-            // 하지만 이건 복잡하므로 일단 시도하지 않음
+            // 강력한 수정 적용
+            workingJsonText = fixJsonSyntax(workingJsonText);
             
             parsedData = JSON.parse(workingJsonText);
             console.log('[INFO] JSON 파싱 성공 (최종 수정 후)');
@@ -344,32 +530,42 @@ async function parseRegistryPdfWithGemini(filePath) {
             console.error('[ERROR] 최종 JSON 파싱 실패:', finalError.message);
             console.error('[ERROR] 원본 파싱 오류:', parseError.message);
             console.error('[DEBUG] JSON 텍스트 길이:', workingJsonText.length);
-            console.error('[DEBUG] JSON 텍스트 (처음 1500자):', workingJsonText.substring(0, 1500));
-            console.error('[DEBUG] JSON 텍스트 (마지막 500자):', workingJsonText.substring(Math.max(0, workingJsonText.length - 500)));
+            console.error('[DEBUG] JSON 텍스트 (처음 2000자):', workingJsonText.substring(0, 2000));
+            console.error('[DEBUG] JSON 텍스트 (마지막 1000자):', workingJsonText.substring(Math.max(0, workingJsonText.length - 1000)));
             
             if (errorPosition) {
-              const contextStart = Math.max(0, errorPosition - 200);
-              const contextEnd = Math.min(workingJsonText.length, errorPosition + 200);
-              console.error('[DEBUG] 오류 위치 주변 (400자):', workingJsonText.substring(contextStart, contextEnd));
+              const contextStart = Math.max(0, errorPosition - 300);
+              const contextEnd = Math.min(workingJsonText.length, errorPosition + 300);
+              console.error('[DEBUG] 오류 위치 주변 (600자):', workingJsonText.substring(contextStart, contextEnd));
             }
             
             // #region agent log
             try {
-              fetch('http://127.0.0.1:7242/ingest/aea20415-20d7-43b7-94bf-cc94e6541506',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'geminiParser.js:320',message:'JSON parse error final',data:{error:finalError.message,originalError:parseError.message,jsonTextLength:workingJsonText.length,first500Chars:workingJsonText.substring(0,500),errorPosition:errorPosition},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+              fetch('http://127.0.0.1:7242/ingest/aea20415-20d7-43b7-94bf-cc94e6541506',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'geminiParser.js:370',message:'JSON parse error final',data:{error:finalError.message,originalError:parseError.message,jsonTextLength:workingJsonText.length,first500Chars:workingJsonText.substring(0,500),errorPosition:errorPosition},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
             } catch (e) {}
             // #endregion
             
             // 원본 응답도 로그로 출력
-            console.error('[ERROR] 원본 Gemini 응답 (처음 2000자):', responseText.substring(0, 2000));
-            console.error('[ERROR] 원본 Gemini 응답 (마지막 2000자):', responseText.substring(Math.max(0, responseText.length - 2000)));
+            console.error('[ERROR] 원본 Gemini 응답 (처음 3000자):', responseText.substring(0, 3000));
+            console.error('[ERROR] 원본 Gemini 응답 (마지막 3000자):', responseText.substring(Math.max(0, responseText.length - 3000)));
             
             throw new Error(`JSON 파싱 실패 (${maxParseAttempts}회 시도): ${finalError.message}`);
           }
         } else {
-          // 재시도 전: 원본으로 복원 후 다시 시도
-          workingJsonText = jsonText;
-          // 마지막 쉼표만 제거
-          workingJsonText = workingJsonText.replace(/,(\s*[}\]])/g, '$1');
+          // 재시도 전: 점진적으로 수정 적용
+          if (parseAttempts === 1) {
+            // 1차: 마지막 쉼표만 제거
+            workingJsonText = originalJsonText.replace(/,(\s*[}\]])/g, '$1');
+          } else if (parseAttempts === 2) {
+            // 2차: 여러 번 쉼표 제거
+            workingJsonText = originalJsonText;
+            for (let i = 0; i < 5; i++) {
+              workingJsonText = workingJsonText.replace(/,(\s*[}\]])/g, '$1');
+            }
+          } else {
+            // 3차 이상: 강력한 수정 적용
+            workingJsonText = fixJsonSyntax(originalJsonText);
+          }
         }
       }
     }
@@ -395,7 +591,85 @@ async function parseRegistryPdfWithGemini(filePath) {
       parsedData.sectionB = [];
     }
     
-    // basicInfo 필수 필드 확인
+    // basicInfo 필수 필드 확인 및 데이터 유효성 검증
+    const validationErrors = [];
+    
+    // #region agent log
+    try {
+      fetch('http://127.0.0.1:7242/ingest/aea20415-20d7-43b7-94bf-cc94e6541506',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'geminiParser.js:490',message:'before validation',data:{basicInfoKeys:Object.keys(parsedData.basicInfo||{}),locationValue:parsedData.basicInfo?.location,roadAddressValue:parsedData.basicInfo?.roadAddress,buildingNameValue:parsedData.basicInfo?.buildingName,ownerNameValue:parsedData.basicInfo?.ownerName,uniqueNumberValue:parsedData.basicInfo?.uniqueNumber},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+    } catch (e) {}
+    // #endregion
+    
+    // location 필드 검증 (잘못된 값 감지)
+    if (parsedData.basicInfo.location) {
+      const location = parsedData.basicInfo.location.trim();
+      if (location === '번, 건물명칭 및 번호' || location === '및 번호' || location.length < 5) {
+        validationErrors.push(`location 필드가 잘못된 값입니다: "${location}"`);
+        console.error(`[ERROR] location 필드 오류: "${location}"`);
+        
+        // #region agent log
+        try {
+          fetch('http://127.0.0.1:7242/ingest/aea20415-20d7-43b7-94bf-cc94e6541506',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'geminiParser.js:500',message:'location validation error',data:{locationValue:location,error:'invalid location value'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+        } catch (e) {}
+        // #endregion
+      }
+    }
+    
+    // roadAddress 필드 검증
+    if (parsedData.basicInfo.roadAddress) {
+      const roadAddress = parsedData.basicInfo.roadAddress.trim();
+      if (roadAddress === ']' || roadAddress === '[' || roadAddress.length < 3) {
+        validationErrors.push(`roadAddress 필드가 잘못된 값입니다: "${roadAddress}"`);
+        console.error(`[ERROR] roadAddress 필드 오류: "${roadAddress}"`);
+      }
+    }
+    
+    // buildingName 필드 검증
+    if (parsedData.basicInfo.buildingName) {
+      const buildingName = parsedData.basicInfo.buildingName.trim();
+      if (buildingName === '및 번호' || buildingName.length < 2) {
+        validationErrors.push(`buildingName 필드가 잘못된 값입니다: "${buildingName}"`);
+        console.error(`[ERROR] buildingName 필드 오류: "${buildingName}"`);
+      }
+    }
+    
+    // landRightRatio 필드 검증 (다른 필드의 값이 잘못 들어간 경우)
+    if (parsedData.basicInfo.landRightRatio) {
+      const ratio = parsedData.basicInfo.landRightRatio.trim();
+      if (ratio.includes('등기원인') || ratio.includes('기타사항') || ratio.length > 50) {
+        validationErrors.push(`landRightRatio 필드가 잘못된 값입니다: "${ratio}"`);
+        console.error(`[ERROR] landRightRatio 필드 오류: "${ratio}"`);
+      }
+    }
+    
+    // uniqueNumber 검증
+    if (!parsedData.basicInfo.uniqueNumber || parsedData.basicInfo.uniqueNumber.trim() === '') {
+      validationErrors.push('uniqueNumber 필드가 없습니다.');
+      console.error('[ERROR] uniqueNumber 필드가 없습니다.');
+    } else {
+      // 고유번호 형식 검증 (XXXX-XXXX-XXXXXX)
+      const uniqueNumber = parsedData.basicInfo.uniqueNumber.trim();
+      if (!/^\d{4}-\d{4}-\d{6}$/.test(uniqueNumber)) {
+        console.warn(`[WARN] uniqueNumber 형식이 올바르지 않을 수 있습니다: "${uniqueNumber}"`);
+      }
+    }
+    
+    // 검증 오류가 있으면 경고
+    if (validationErrors.length > 0) {
+      console.error(`[ERROR] 데이터 검증 실패 (${validationErrors.length}개 오류):`);
+      validationErrors.forEach((error, i) => {
+        console.error(`[ERROR] ${i + 1}. ${error}`);
+      });
+      console.error('[ERROR] 파싱된 데이터가 유효하지 않습니다. Gemini API 응답을 확인하세요.');
+      console.error('[ERROR] 파싱된 basicInfo:', JSON.stringify(parsedData.basicInfo, null, 2));
+      
+      // #region agent log
+      try {
+        fetch('http://127.0.0.1:7242/ingest/aea20415-20d7-43b7-94bf-cc94e6541506',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'geminiParser.js:540',message:'validation failed',data:{errorCount:validationErrors.length,errors:validationErrors,basicInfo:parsedData.basicInfo},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      } catch (e) {}
+      // #endregion
+    }
+    
     if (!parsedData.basicInfo.location && !parsedData.basicInfo.uniqueNumber) {
       console.warn('[WARN] basicInfo에 필수 정보가 없습니다. 파싱 결과를 확인하세요.');
     }
@@ -407,11 +681,20 @@ async function parseRegistryPdfWithGemini(filePath) {
       sectionBCount: (parsedData.sectionB || []).length
     });
     
+    // #region agent log
+    try {
+      fetch('http://127.0.0.1:7242/ingest/aea20415-20d7-43b7-94bf-cc94e6541506',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'geminiParser.js:560',message:'parsing complete',data:{basicInfoKeys:Object.keys(parsedData.basicInfo||{}),sectionACount:parsedData.sectionA?.length||0,sectionBCount:parsedData.sectionB?.length||0,hasSummary:!!parsedData.summary,locationValue:parsedData.basicInfo?.location,ownerNameValue:parsedData.basicInfo?.ownerName},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+    } catch (e) {}
+    // #endregion
+    
     // 파싱된 데이터의 실제 내용 확인 (디버깅용)
     console.log('[DEBUG] basicInfo 전체 내용:', JSON.stringify(parsedData.basicInfo || {}, null, 2));
     console.log('[DEBUG] basicInfo.location:', parsedData.basicInfo?.location);
-    console.log('[DEBUG] basicInfo.ownerName:', parsedData.basicInfo?.ownerName);
+    console.log('[DEBUG] basicInfo.roadAddress:', parsedData.basicInfo?.roadAddress);
     console.log('[DEBUG] basicInfo.buildingName:', parsedData.basicInfo?.buildingName);
+    console.log('[DEBUG] basicInfo.ownerName:', parsedData.basicInfo?.ownerName);
+    console.log('[DEBUG] basicInfo.uniqueNumber:', parsedData.basicInfo?.uniqueNumber);
+    console.log('[DEBUG] basicInfo.landRightRatio:', parsedData.basicInfo?.landRightRatio);
     
     if (parsedData.sectionA && parsedData.sectionA.length > 0) {
       console.log('[DEBUG] sectionA 항목 수:', parsedData.sectionA.length);
