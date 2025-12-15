@@ -953,6 +953,9 @@ PDF 텍스트가 이렇게 되어 있다면:
     });
     // #endregion
     
+    // 상호 참조 말소 처리 (CRITICAL FIX)
+    applyCrossReferenceCancellation(cleanedData);
+    
     // 요약 정보 생성
     const summary = generateSummary(cleanedData.basicInfo, cleanedData.sectionA, cleanedData.sectionB);
     
@@ -984,6 +987,56 @@ PDF 텍스트가 이렇게 되어 있다면:
     }
     
     throw new Error(`Gemini API 파싱 실패: ${error.message}`);
+  }
+}
+
+/**
+ * 상호 참조 말소 처리
+ * "X번근저당권설정등기말소" 같은 항목이 있으면 해당 X번 항목을 '말소'로 변경
+ */
+function applyCrossReferenceCancellation(cleanedData) {
+  // 갑구(Section A) 처리
+  if (Array.isArray(cleanedData.sectionA)) {
+    cleanedData.sectionA.forEach((item, index) => {
+      const purpose = item.purpose || '';
+      
+      // "X번...말소" 또는 "X번...해지" 패턴 찾기
+      const cancellationMatch = purpose.match(/^(\d+(?:-\d+)?)번.*(?:말소|해지|경정)/);
+      
+      if (cancellationMatch) {
+        const targetRankNumber = cancellationMatch[1];
+        console.log(`[INFO] 갑구 ${item.rankNumber}번이 ${targetRankNumber}번을 말소합니다: ${purpose}`);
+        
+        // 해당 순위번호를 가진 항목 찾아서 '말소'로 변경
+        const targetItem = cleanedData.sectionA.find(a => a.rankNumber === targetRankNumber);
+        if (targetItem) {
+          targetItem.status = '말소';
+          console.log(`[INFO] 갑구 ${targetRankNumber}번의 상태를 '말소'로 변경했습니다.`);
+        }
+      }
+    });
+  }
+  
+  // 을구(Section B) 처리
+  if (Array.isArray(cleanedData.sectionB)) {
+    cleanedData.sectionB.forEach((item, index) => {
+      const purpose = item.purpose || '';
+      
+      // "X번근저당권설정등기말소" 또는 "X번...말소" 패턴 찾기
+      const cancellationMatch = purpose.match(/^(\d+(?:-\d+)?)번.*(?:말소|해지|경정)/);
+      
+      if (cancellationMatch) {
+        const targetRankNumber = cancellationMatch[1];
+        console.log(`[INFO] 을구 ${item.rankNumber}번이 ${targetRankNumber}번을 말소합니다: ${purpose}`);
+        
+        // 해당 순위번호를 가진 항목 찾아서 '말소'로 변경
+        const targetItem = cleanedData.sectionB.find(b => b.rankNumber === targetRankNumber);
+        if (targetItem) {
+          targetItem.status = '말소';
+          console.log(`[INFO] 을구 ${targetRankNumber}번의 상태를 '말소'로 변경했습니다.`);
+        }
+      }
+    });
   }
 }
 
