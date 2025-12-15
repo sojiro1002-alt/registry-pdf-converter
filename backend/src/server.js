@@ -90,7 +90,7 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok', 
     message: '서버가 정상 작동 중입니다.',
-    version: '1.0.2-strict-validation',
+    version: '1.0.3-cross-ref-fix',
     timestamp: new Date().toISOString()
   });
 });
