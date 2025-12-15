@@ -102,10 +102,30 @@ npm run build
 
 ### 배포 방법
 
-#### 옵션 A: 프로젝트 루트에서 배포
+**⚠️ 중요: 배포 전에 반드시 빌드를 먼저 실행해야 합니다!**
+
+#### 옵션 A: 프로젝트 루트에서 배포 (권장)
 
 ```bash
-# 프로젝트 루트에서
+# 1. 빌드 먼저 실행
+cd frontend
+npm install
+npm run build
+cd ..
+
+# 2. 배포
+wrangler deploy
+```
+
+또는 한 번에:
+```bash
+# Windows (PowerShell)
+.\build-and-deploy.ps1
+wrangler deploy
+
+# Linux/Mac
+chmod +x build-and-deploy.sh
+./build-and-deploy.sh
 wrangler deploy
 ```
 
@@ -123,7 +143,13 @@ wrangler deploy
 #### 옵션 C: 명령어에 직접 지정
 
 ```bash
-# 프로젝트 루트에서
+# 1. 먼저 빌드
+cd frontend
+npm install
+npm run build
+cd ..
+
+# 2. 배포 (프로젝트 루트에서)
 wrangler deploy --assets=./frontend/dist
 
 # 또는 frontend 디렉토리에서
@@ -176,15 +202,37 @@ wrangler deploy --var VITE_API_BASE:https://your-backend-url.com/api
 - `[site]` → `[assets]`로 변경
 - `bucket = "./dist"` → `directory = "./dist"`로 변경
 
-#### 에러: "Cannot find module"
+#### 에러: "Cannot find module" 또는 "directory not found"
 
-빌드가 완료되지 않은 경우 발생합니다.
+빌드가 완료되지 않아 `dist` 디렉토리가 없는 경우 발생합니다.
 
 **해결 방법:**
 ```bash
+# 1. frontend 디렉토리로 이동
 cd frontend
+
+# 2. 의존성 설치
+npm install
+
+# 3. 빌드 실행
 npm run build
+
+# 4. dist 디렉토리 확인
+ls dist  # 또는 dir dist (Windows)
+
+# 5. 다시 배포
+cd ..
+wrangler deploy
 ```
+
+#### 에러: "Because you've defined a [site] configuration..."
+
+이 경고는 구식 `[site]` 설정이 여전히 남아있는 경우 발생합니다.
+
+**해결 방법:**
+1. `wrangler.toml` 파일에서 `[site]` 섹션을 완전히 제거했는지 확인
+2. `[assets]` 섹션만 남아있는지 확인
+3. 파일을 저장하고 다시 배포
 
 #### 배포 전 체크리스트
 
