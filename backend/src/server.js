@@ -87,7 +87,12 @@ const upload = multer({
  * 헬스체크 엔드포인트
  */
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: '서버가 정상 작동 중입니다.' });
+  res.json({ 
+    status: 'ok', 
+    message: '서버가 정상 작동 중입니다.',
+    version: '1.0.1',
+    timestamp: new Date().toISOString()
+  });
 });
 
 /**
@@ -187,6 +192,21 @@ app.post('/api/convert', upload.single('pdf'), async (req, res) => {
     const baseUrl = process.env.NODE_ENV === 'production' 
       ? 'https://registry-pdf-converter-api.onrender.com'
       : `http://localhost:${PORT}`;
+    
+    // 최종 데이터 확인 및 로깅
+    console.log('[DEBUG] 최종 응답 데이터 확인:');
+    console.log('[DEBUG] parsedData.basicInfo:', JSON.stringify(parsedData.basicInfo, null, 2));
+    console.log('[DEBUG] parsedData.summary:', JSON.stringify(parsedData.summary, null, 2));
+    console.log('[DEBUG] parsedData.sectionA 개수:', parsedData.sectionA?.length || 0);
+    console.log('[DEBUG] parsedData.sectionB 개수:', parsedData.sectionB?.length || 0);
+    
+    // 데이터가 비어있는 경우 경고
+    if (!parsedData.basicInfo || Object.keys(parsedData.basicInfo).length === 0) {
+      console.error('[ERROR] 최종 응답에 basicInfo가 비어있습니다!');
+    }
+    if (!parsedData.basicInfo?.location && !parsedData.basicInfo?.uniqueNumber) {
+      console.error('[ERROR] 최종 응답에 필수 정보가 없습니다!');
+    }
     
     res.json({
       success: true,
