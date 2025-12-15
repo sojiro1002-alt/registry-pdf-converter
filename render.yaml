@@ -13,5 +13,5 @@ services:
       - key: PORT
         value: 10000
       - key: GEMINI_API_KEY
-        value: AIzaSyAlSBSZ3udbacXiEpC3cjD4nFaDLHinsjk
+        sync: false
     healthCheckPath: /api/health
