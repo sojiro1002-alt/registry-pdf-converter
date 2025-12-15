@@ -142,7 +142,14 @@ function App() {
     } catch (error) {
       setUploadState('error');
       if (axios.isAxiosError(error) && error.response?.data?.error) {
-        setErrorMessage(error.response.data.error);
+        let errorMsg = error.response.data.error;
+        // 상세 에러 메시지가 있으면 추가
+        if (error.response.data.details) {
+          errorMsg += ` (상세: ${error.response.data.details})`;
+        }
+        setErrorMessage(errorMsg);
+      } else if (axios.isAxiosError(error) && error.message) {
+        setErrorMessage(`변환 중 오류가 발생했습니다: ${error.message}`);
       } else {
         setErrorMessage('변환 중 오류가 발생했습니다. 다시 시도해주세요.');
       }

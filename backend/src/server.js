@@ -225,7 +225,8 @@ app.post('/api/convert', upload.single('pdf'), async (req, res) => {
     res.status(500).json({
       success: false,
       error: userFriendlyMessage,
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      details: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   } finally {
     // 업로드된 PDF 파일 삭제 (보안)
