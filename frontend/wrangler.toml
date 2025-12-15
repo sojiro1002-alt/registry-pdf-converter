@@ -2,11 +2,15 @@
 # 이 파일은 frontend 디렉토리에서 직접 배포할 때 사용
 
 name = "registry-pdf-converter-frontend"
-compatibility_date = "2024-01-01"
+compatibility_date = "2024-12-15"
 
-# 정적 자산 배포 (빌드된 파일)
-[site]
-bucket = "./dist"
+# 정적 자산 배포 (최신 방식)
+[assets]
+directory = "./dist"
+
+# 빌드 명령어 (선택사항)
+[build]
+command = "npm install && npm run build"
 
 # 환경 변수 (선택사항)
 # [vars]

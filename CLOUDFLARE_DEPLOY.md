@@ -152,14 +152,29 @@ wrangler deploy --var VITE_API_BASE:https://your-backend-url.com/api
 
 ### 문제 해결
 
-#### 에러: "No entry-point specified"
+#### 에러: "No entry-point specified" 또는 "The entry-point file at 'workers-site/index.js' was not found"
 
-이 에러는 `wrangler.toml` 파일이 없거나 잘못 설정된 경우 발생합니다.
+이 에러는 구식 `[site]` 설정을 사용하거나 `wrangler.toml` 파일이 잘못 설정된 경우 발생합니다.
 
 **해결 방법:**
-1. 프로젝트 루트 또는 frontend 디렉토리에 `wrangler.toml` 파일이 있는지 확인
-2. `[site]` 섹션의 `bucket` 경로가 올바른지 확인
-3. 빌드가 완료되어 `dist` 디렉토리가 존재하는지 확인
+1. **최신 `[assets]` 방식 사용** (권장):
+   ```toml
+   [assets]
+   directory = "./dist"
+   ```
+   구식 `[site]` 설정 대신 `[assets]`를 사용하세요.
+
+2. 프로젝트 루트 또는 frontend 디렉토리에 `wrangler.toml` 파일이 있는지 확인
+3. `[assets]` 섹션의 `directory` 경로가 올바른지 확인
+4. 빌드가 완료되어 `dist` 디렉토리가 존재하는지 확인
+
+#### 에러: "Because you've defined a [site] configuration..."
+
+이 경고는 구식 `[site]` 설정을 사용할 때 나타납니다.
+
+**해결 방법:**
+- `[site]` → `[assets]`로 변경
+- `bucket = "./dist"` → `directory = "./dist"`로 변경
 
 #### 에러: "Cannot find module"
 
